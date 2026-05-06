@@ -333,7 +333,7 @@
     </div>
 
     <div class="main-content">
-        <!-- 1. 전체 대시보드 (엑셀 양식 적용) -->
+        <!-- 1. 전체 대시보드 -->
         <div id="view-dashboard" class="view-section active">
             <h1>전사 관리 현황</h1>
             <div class="viz-container">
@@ -392,7 +392,7 @@
             </div>
         </div>
 
-        <!-- 2. 팀별 관리대장 (엑셀 양식 적용) -->
+        <!-- 2. 팀별 관리대장 -->
         <div id="view-team" class="view-section">
             <div class="header-area">
                 <div class="header-left">
@@ -446,9 +446,10 @@
                 <div class="form-group"><label>건물명</label><input type="text" id="input-building"></div>
                 <div class="form-group"><label>세부위치</label><input type="text" id="input-loc"></div>
                 <div class="form-group"><label>제조업체명</label><input type="text" id="input-maker"></div>
-                <div class="form-group"><label>제조일</label><input type="date" id="input-mdate" onchange="autoCalcDate()">
-                </div>
-                <div class="form-group"><label>교체예정일</label><input type="date" id="input-rdate"></div>
+                <!-- [수정] 입력 타입을 month로 변경 -->
+                <div class="form-group"><label>제조일</label><input type="month" id="input-mdate"
+                        onchange="autoCalcDate()"></div>
+                <div class="form-group"><label>교체예정일</label><input type="month" id="input-rdate"></div>
                 <div class="form-group" style="grid-column: span 4;"><label>변경/조치내역</label><input type="text"
                         id="input-note"></div>
                 <button class="submit-btn" id="btn-submit" onclick="addData()">데이터 저장하기</button>
@@ -482,13 +483,34 @@
     </div>
 
     <script>
-        // 엑셀 명칭 기반 매칭 로직
         let db = [
-            { id: '제조4-1F-01', type: '분말', cap: '20KG', team: '제조4팀', building: 'T2-8동', loc: '1층 계단 앞', maker: '한국소방', mdate: '2016-02-02', rdate: '2026-01-02', note: '-', lastCheck: '2026-05-04' },
-            { id: '전해-1F-10', type: '분말', cap: '6KG', team: '전해액제조팀', building: '본관', loc: '복도', maker: '일명', mdate: '2017-11-09', rdate: '2027-10-09', note: '-', lastCheck: '-' }
+            { id: '제조4-1F-01', type: '분말', cap: '20KG', team: '제조4팀', building: 'T2-8동', loc: '1층 계단 앞', maker: '한국소방', mdate: '2016-02', rdate: '2026-01', note: '-', lastCheck: '2026-05-04' },
+            { id: '전해-1F-10', type: '분말', cap: '6KG', team: '전해액제조팀', building: '본관', loc: '복도', maker: '일명', mdate: '2017-11', rdate: '2027-10', note: '-', lastCheck: '-' }
         ];
         let teams = ['전해액제조팀', '제조4팀', '시설관리팀', '공무팀'];
         let currentTeam = '전해액제조팀';
+
+        function autoCalcDate() {
+            let mdate = document.getElementById('input-mdate').value; // YYYY-MM 형식
+            if (document.getElementById('input-type').value === '분말' && mdate) {
+                let parts = mdate.split('-');
+                let year = parseInt(parts[0]);
+                let month = parseInt(parts[1]);
+
+                // 9년 11개월 뒤 계산
+                let targetDate = new Date(year + 9, month + 10);
+                let rYear = targetDate.getFullYear();
+                let rMonth = String(targetDate.getMonth() + 1).padStart(2, '0');
+
+                document.getElementById('input-rdate').value = `${rYear}-${rMonth}`;
+            }
+        }
+
+        function formatDate(val) {
+            if (!val || val === '-') return '-';
+            // 만약 YYYY-MM-DD 형식이 들어오면 YYYY-MM으로 자름
+            return val.length > 7 ? val.substring(0, 7) : val;
+        }
 
         function importExcel(event) {
             const file = event.target.files[0];
@@ -497,35 +519,17 @@
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
                 const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-
-                // [수정] 사진 속 10개 명칭과 1:1 매칭
                 json.forEach(row => {
                     db.push({
-                        id: row['소화기관리번호'] || '미기입',
-                        type: row['종류'] || '분말',
-                        cap: row['용량'] || '',
-                        team: row['해당부서'] || currentTeam,
-                        building: row['건물명'] || '',
-                        loc: row['세부위치'] || '',
-                        maker: row['제조업체명'] || '',
-                        mdate: row['제조일'] || '-',
-                        rdate: row['교체예정일'] || '-',
-                        note: row['변경/조치내역'] || '',
-                        lastCheck: '-'
+                        id: row['소화기관리번호'] || '미기입', type: row['종류'] || '분말', cap: row['용량'] || '', team: row['해당부서'] || currentTeam,
+                        building: row['건물명'] || '', loc: row['세부위치'] || '', maker: row['제조업체명'] || '',
+                        mdate: formatDate(row['제조일']), rdate: formatDate(row['교체예정일']),
+                        note: row['변경/조치내역'] || '', lastCheck: '-'
                     });
                 });
                 updateDashboard(); updateTeamView(); alert('엑셀 데이터 로드 완료!');
             };
             reader.readAsArrayBuffer(file);
-        }
-
-        function autoCalcDate() {
-            let mdate = document.getElementById('input-mdate').value;
-            if (document.getElementById('input-type').value === '분말' && mdate) {
-                let d = new Date(mdate);
-                d.setFullYear(d.getFullYear() + 9); d.setMonth(d.getMonth() + 11);
-                document.getElementById('input-rdate').value = d.toISOString().split('T')[0];
-            }
         }
 
         function switchMenu(m) {
@@ -538,7 +542,9 @@
 
         function isWarning(t, r) {
             if (t !== '분말' || !r || r === '-') return false;
-            let d = (new Date(r) - new Date()) / (1000 * 60 * 60 * 24); return d <= 180;
+            // 년-월 형식이므로 1일로 가정하여 비교
+            let d = (new Date(r + "-01") - new Date()) / (1000 * 60 * 60 * 24);
+            return d <= 180;
         }
 
         function updateDashboard() {
@@ -590,7 +596,7 @@
         function addData() {
             let id = document.getElementById('input-id').value; if (!id) return;
             let editIdx = parseInt(document.getElementById('edit-index').value);
-            let newData = { id, type: document.getElementById('input-type').value, cap: document.getElementById('input-cap').value, team: currentTeam, building: document.getElementById('input-building').value, loc: document.getElementById('input-loc').value, maker: document.getElementById('input-maker').value, mdate: document.getElementById('input-mdate').value, rdate: document.getElementById('input-rdate').value, note: document.getElementById('input-note').value, lastCheck: editIdx > -1 ? db[editIdx].lastCheck : '-' };
+            let newData = { id, type: document.getElementById('input-type').value, cap: document.getElementById('input-cap').value, team: currentTeam, building: document.getElementById('input-building').value, loc: document.getElementById('input-loc').value, maker: document.getElementById('input-maker').value, mdate: formatDate(document.getElementById('input-mdate').value), rdate: formatDate(document.getElementById('input-rdate').value), note: document.getElementById('input-note').value, lastCheck: editIdx > -1 ? db[editIdx].lastCheck : '-' };
             if (editIdx > -1) { db[editIdx] = newData; document.getElementById('edit-index').value = "-1"; document.getElementById('btn-submit').innerText = "데이터 저장하기"; }
             else { db.push(newData); }
             updateTeamView(); updateDashboard();
