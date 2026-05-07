@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>스마트 소화기 관리 시스템</title>
+    <title>소화기 관리대장 시스템</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * {
@@ -101,12 +101,23 @@
             background: #059669;
         }
 
+        .btn-save {
+            background: #0ea5e9;
+        }
+
         .btn-undo {
             background: #dc2626;
             margin-left: 5px;
         }
 
-        /* 대시보드 시각화 */
+        .btn-sub {
+            background: #6b7280;
+            margin-left: 5px;
+        }
+
+        /* 서브 버튼 색상 */
+
+        /* 대시보드 정렬 */
         .viz-container {
             display: flex;
             gap: 20px;
@@ -123,12 +134,18 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 180px;
+            min-height: 200px;
+        }
+
+        .viz-card h3 {
+            margin-bottom: 20px;
+            font-size: 16px;
+            color: #4b5563;
         }
 
         .donut-chart {
-            width: 100px;
-            height: 100px;
+            width: 130px;
+            height: 130px;
             border-radius: 50%;
             position: relative;
             display: flex;
@@ -137,8 +154,8 @@
         }
 
         .donut-inner {
-            width: 75px;
-            height: 75px;
+            width: 95px;
+            height: 95px;
             background: white;
             border-radius: 50%;
             display: flex;
@@ -146,6 +163,38 @@
             align-items: center;
             justify-content: center;
             z-index: 2;
+        }
+
+        .status-bars {
+            width: 100%;
+            max-width: 400px;
+            padding: 0 20px;
+        }
+
+        .bar-group {
+            margin-bottom: 15px;
+        }
+
+        .bar-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .bar-bg {
+            width: 100%;
+            height: 12px;
+            background: #eee;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 6px;
+            transition: width 0.3s;
         }
 
         /* 요약 카드 */
@@ -158,9 +207,9 @@
 
         .mini-card {
             flex: 1;
-            min-width: 100px;
+            min-width: 130px;
             background: white;
-            padding: 15px;
+            padding: 18px;
             border-radius: 10px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             text-align: center;
@@ -174,7 +223,7 @@
         }
 
         .mini-card .num {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: bold;
         }
 
@@ -191,11 +240,17 @@
             color: #dc2626;
         }
 
+        /* 테이블 및 선택 필터 */
         .table-wrapper {
             background: white;
             border-radius: 12px;
             padding: 20px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .table-scroll {
+            overflow-x: auto;
+            width: 100%;
         }
 
         table {
@@ -207,9 +262,9 @@
 
         th,
         td {
-            padding: 10px 5px;
+            padding: 12px 8px;
             border-bottom: 1px solid #e5e7eb;
-            font-size: 10px;
+            font-size: 11px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -218,6 +273,18 @@
         th {
             background-color: #f9fafb;
             font-weight: 600;
+            color: #374151;
+        }
+
+        .header-select {
+            display: block;
+            width: 100%;
+            margin-top: 5px;
+            padding: 4px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 10px;
+            cursor: pointer;
         }
 
         .tabs {
@@ -225,6 +292,7 @@
             gap: 8px;
             margin-bottom: 15px;
             overflow-x: auto;
+            align-items: center;
         }
 
         .tab-btn {
@@ -249,7 +317,7 @@
             gap: 10px;
             margin-bottom: 20px;
             background: white;
-            padding: 15px;
+            padding: 20px;
             border-radius: 12px;
             border: 1px solid #e5e7eb;
         }
@@ -257,25 +325,25 @@
         .form-group {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 5px;
         }
 
         .form-group label {
-            font-size: 10px;
+            font-size: 11px;
             font-weight: bold;
         }
 
         .form-group input,
         .form-group select {
-            padding: 6px;
+            padding: 8px;
             border: 1px solid #d1d5db;
             border-radius: 4px;
-            font-size: 11px;
+            font-size: 12px;
         }
 
         .submit-btn {
             grid-column: span 4;
-            padding: 10px;
+            padding: 12px;
             background: #4f46e5;
             color: white;
             border: none;
@@ -289,7 +357,7 @@
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 9px;
+            font-size: 10px;
             color: white;
         }
 
@@ -309,13 +377,12 @@
 
 <body>
     <div class="sidebar">
-        <div class="logo">🧯 소화기 Pro</div>
+        <div class="logo">🧯 소화기 관리대장</div>
         <button class="menu-btn active" id="btn-menu-dash" onclick="switchMenu('dashboard')">📊 전체 대시보드</button>
         <button class="menu-btn" id="btn-menu-team" onclick="switchMenu('team')">🏢 팀별 관리대장</button>
     </div>
 
     <div class="main-content">
-        <!-- 1. 전체 대시보드 -->
         <div id="view-dashboard" class="view-section active">
             <h1>전사 관리 현황</h1>
             <div class="viz-container">
@@ -323,65 +390,95 @@
                     <h3>전체 보관 수량</h3>
                     <div id="total-donut" class="donut-chart">
                         <div class="donut-inner">
-                            <div style="font-size:22px; font-weight:bold;" id="dash-total">0</div>
-                            <div style="font-size:10px; color:#999;">TOTAL</div>
+                            <div style="font-size:26px; font-weight:bold;" id="dash-total">0</div>
+                            <div style="font-size:10px; color:#999; font-weight:bold;">TOTAL</div>
                         </div>
                     </div>
                 </div>
-                <div class="viz-card" style="align-items: flex-start;">
+                <div class="viz-card">
                     <h3>상태 요약</h3>
-                    <div style="width:100%; margin-top:10px;">
-                        <div style="display:flex; justify-content:space-between; font-size:12px;"><span>정상</span><span
-                                id="dash-normal-txt">0</span></div>
-                        <div style="width:100%; height:8px; background:#eee; border-radius:4px; margin-bottom:10px;">
-                            <div id="dash-normal-bar"
-                                style="height:100%; background:#16a34a; border-radius:4px; width:0%;"></div>
+                    <div class="status-bars">
+                        <div class="bar-group">
+                            <div class="bar-label"><span>정상</span><span id="dash-normal-txt">0</span></div>
+                            <div class="bar-bg">
+                                <div id="dash-normal-bar" class="bar-fill" style="background:#16a34a; width:0%;"></div>
+                            </div>
                         </div>
-                        <div style="display:flex; justify-content:space-between; font-size:12px; color:#dc2626;">
-                            <span>🚨 교체 경고</span><span id="dash-warning-txt">0</span></div>
-                        <div style="width:100%; height:8px; background:#eee; border-radius:4px;">
-                            <div id="dash-warning-bar"
-                                style="height:100%; background:#dc2626; border-radius:4px; width:0%;"></div>
+                        <div class="bar-group">
+                            <div class="bar-label" style="color:#dc2626;"><span>🚨 교체필요 및 교체임박</span><span
+                                    id="dash-warning-txt">0</span></div>
+                            <div class="bar-bg">
+                                <div id="dash-warning-bar" class="bar-fill" style="background:#dc2626; width:0%;"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+
             <div class="table-wrapper">
-                <h3>통합 목록</h3>
-                <table style="min-width: 1500px;">
-                    <thead>
-                        <tr>
-                            <th>소화기관리번호</th>
-                            <th>종류</th>
-                            <th>용량</th>
-                            <th>해당부서</th>
-                            <th>건물명</th>
-                            <th>세부위치</th>
-                            <th>제조업체명</th>
-                            <th>제조일</th>
-                            <th>교체예정일</th>
-                            <th>변경/조치내역</th>
-                            <th>상태</th>
-                            <th>최근점검</th>
-                        </tr>
-                    </thead>
-                    <tbody id="all-table-body"></tbody>
-                </table>
+                <h3>통합 목록 (항목 선택 필터링)</h3>
+                <div class="table-scroll">
+                    <table style="min-width: 1600px;">
+                        <thead>
+                            <tr id="filter-header-row">
+                                <th>소화기관리번호<select class="header-select" onchange="applyDashFilter()">
+                                        <option value="all">전체</option>
+                                    </select></th>
+                                <th>종류<select class="header-select" onchange="applyDashFilter()">
+                                        <option value="all">전체</option>
+                                    </select></th>
+                                <th>용량<select class="header-select" onchange="applyDashFilter()">
+                                        <option value="all">전체</option>
+                                    </select></th>
+                                <th>해당부서<select class="header-select" onchange="applyDashFilter()">
+                                        <option value="all">전체</option>
+                                    </select></th>
+                                <th>건물명<select class="header-select" onchange="applyDashFilter()">
+                                        <option value="all">전체</option>
+                                    </select></th>
+                                <th>세부위치<select class="header-select" onchange="applyDashFilter()">
+                                        <option value="all">전체</option>
+                                    </select></th>
+                                <th>제조업체명<select class="header-select" onchange="applyDashFilter()">
+                                        <option value="all">전체</option>
+                                    </select></th>
+                                <th>제조일<select class="header-select" onchange="applyDashFilter()">
+                                        <option value="all">전체</option>
+                                    </select></th>
+                                <th>교체예정일<select class="header-select" onchange="applyDashFilter()">
+                                        <option value="all">전체</option>
+                                    </select></th>
+                                <th>변경/조치내역<select class="header-select" onchange="applyDashFilter()">
+                                        <option value="all">전체</option>
+                                    </select></th>
+                                <th>상태<select class="header-select" onchange="applyDashFilter()">
+                                        <option value="all">전체</option>
+                                    </select></th>
+                                <th>최근점검<select class="header-select" onchange="applyDashFilter()">
+                                        <option value="all">전체</option>
+                                    </select></th>
+                            </tr>
+                        </thead>
+                        <tbody id="all-table-body"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <!-- 2. 팀별 관리대장 -->
         <div id="view-team" class="view-section">
             <div class="header-area">
                 <div class="header-left">
-                    <h1 id="current-team-header">팀별 세부 관리</h1>
+                    <h1>팀별 세부 관리</h1>
                     <button class="btn btn-primary" onclick="addTeam()">+ 새 팀 추가</button>
+                    <button class="btn btn-sub" onclick="editTeamName()">✏️ 팀 이름 수정</button>
+                    <button class="btn btn-undo" style="background:#ef4444;" onclick="deleteTeam()">🗑️ 현재 팀 삭제</button>
                 </div>
                 <div class="header-right">
                     <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" style="display:none;"
                         onchange="importExcel(event)">
                     <button class="btn btn-excel" onclick="document.getElementById('excel-upload').click()">📂 엑셀
                         불러오기</button>
+                    <button class="btn btn-save" onclick="exportToExcel()">💾 엑셀로 저장</button>
                     <button class="btn btn-undo" id="undo-btn" style="display:none;" onclick="undoAction()">↩️ 불러오기
                         취소</button>
                 </div>
@@ -407,7 +504,7 @@
                     <div class="num" id="team-clean-num">0</div>
                 </div>
                 <div class="mini-card card-warn">
-                    <h4>🚨 교체임박</h4>
+                    <h4>🚨 교체필요 및 교체임박</h4>
                     <div class="num" id="team-warn-num">0</div>
                 </div>
             </div>
@@ -436,36 +533,60 @@
 
             <div class="table-wrapper">
                 <h3 id="current-team-title">목록</h3>
-                <table style="min-width: 1600px;">
-                    <thead>
-                        <tr>
-                            <th>소화기관리번호</th>
-                            <th>종류</th>
-                            <th>용량</th>
-                            <th>해당부서</th>
-                            <th>건물명</th>
-                            <th>세부위치</th>
-                            <th>제조업체명</th>
-                            <th>제조일</th>
-                            <th>교체예정일</th>
-                            <th>변경/조치내역</th>
-                            <th>상태</th>
-                            <th>최근점검</th>
-                            <th>점검</th>
-                            <th>내용수정</th>
-                        </tr>
-                    </thead>
-                    <tbody id="team-table-body"></tbody>
-                </table>
+                <div class="table-scroll">
+                    <table style="min-width: 1600px;">
+                        <thead>
+                            <tr>
+                                <th>소화기관리번호</th>
+                                <th>종류</th>
+                                <th>용량</th>
+                                <th>해당부서</th>
+                                <th>건물명</th>
+                                <th>세부위치</th>
+                                <th>제조업체명</th>
+                                <th>제조일</th>
+                                <th>교체예정일</th>
+                                <th>변경/조치내역</th>
+                                <th>상태</th>
+                                <th>최근점검</th>
+                                <th>점검</th>
+                                <th>내용수정</th>
+                            </tr>
+                        </thead>
+                        <tbody id="team-table-body"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        let db = [];
+        // 초기 데이터 로드
+        let db = JSON.parse(localStorage.getItem('fireExtData')) || [];
+        let teams = JSON.parse(localStorage.getItem('fireExtTeams')) || ['전해액제조팀', '제조4팀', '시설관리팀', '공무팀'];
         let dbBackup = null;
-        let teams = ['전해액제조팀', '제조4팀', '시설관리팀', '공무팀'];
-        let currentTeam = '전해액제조팀';
+        let currentTeam = teams[0];
+
+        function saveToLocal() {
+            localStorage.setItem('fireExtData', JSON.stringify(db));
+            localStorage.setItem('fireExtTeams', JSON.stringify(teams));
+        }
+
+        // 엑셀 내보내기
+        function exportToExcel() {
+            if (db.length === 0) { alert('데이터가 없습니다.'); return; }
+            const exportData = db.map(i => ({
+                '소화기관리번호': i.id, '종류': i.type, '용량': i.cap, '해당부서': i.team,
+                '건물명': i.building, '세부위치': i.loc, '제조업체명': i.maker,
+                '제조일': i.mdate, '교체예정일': i.rdate, '변경/조치내역': i.note,
+                '상태': isWarning(i.type, i.rdate) ? '🚨경고' : '🟢정상', '최근점검': i.lastCheck
+            }));
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "소화기관리데이터");
+            const dateStr = new Date().toISOString().substring(0, 10);
+            XLSX.writeFile(workbook, `소화기관리대장_${dateStr}.xlsx`);
+        }
 
         function importExcel(event) {
             const file = event.target.files[0];
@@ -480,30 +601,23 @@
                     const rowTeam = row['해당부서'] || currentTeam;
                     if (!teams.includes(rowTeam)) teams.push(rowTeam);
                     db.push({
-                        id: String(row['소화기관리번호'] || '미기입'),
-                        type: row['종류'] || '분말',
-                        cap: row['용량'] || '',
-                        team: rowTeam,
-                        building: row['건물명'] || '',
-                        loc: row['세부위치'] || '',
-                        maker: row['제조업체명'] || '',
-                        mdate: row['제조일'] ? String(row['제조일']).substring(0, 7) : '-',
+                        id: String(row['소화기관리번호'] || '미기입'), type: row['종류'] || '분말', cap: row['용량'] || '',
+                        team: rowTeam, building: row['건물명'] || '', loc: row['세부위치'] || '',
+                        maker: row['제조업체명'] || '', mdate: row['제조일'] ? String(row['제조일']).substring(0, 7) : '-',
                         rdate: row['교체예정일'] ? String(row['교체예정일']).substring(0, 7) : '-',
-                        note: row['변경/조치내역'] || '',
-                        lastCheck: '-'
+                        note: row['변경/조치내역'] || '', lastCheck: '-'
                     });
                 });
-                renderTabs(); updateDashboard(); alert('엑셀 데이터가 부서별로 자동 분류되어 업로드되었습니다.');
+                saveToLocal(); renderTabs(); updateDashboard(); alert('업로드 및 자동 저장 완료');
             };
             reader.readAsArrayBuffer(file);
         }
 
         function undoAction() {
-            if (dbBackup && confirm('마지막 불러오기 작업을 취소하시겠습니까?')) {
+            if (dbBackup && confirm('불러오기 전으로 되돌리시겠습니까?')) {
                 db = JSON.parse(JSON.stringify(dbBackup));
-                dbBackup = null;
-                document.getElementById('undo-btn').style.display = 'none';
-                updateDashboard(); updateTeamView(); alert('실행 취소 완료');
+                dbBackup = null; document.getElementById('undo-btn').style.display = 'none';
+                saveToLocal(); updateDashboard(); updateTeamView();
             }
         }
 
@@ -511,6 +625,34 @@
             if (t !== '분말' || !r || r === '-') return false;
             let d = (new Date(r + "-01") - new Date()) / (1000 * 60 * 60 * 24);
             return d <= 180;
+        }
+
+        // 선택형 필터 목록 업데이트
+        function updateFilterOptions() {
+            const headers = document.querySelectorAll('#filter-header-row th');
+            headers.forEach((th, idx) => {
+                const select = th.querySelector('select');
+                const currentVal = select.value;
+                const uniqueValues = [...new Set(db.map(item => {
+                    const mapping = ['id', 'type', 'cap', 'team', 'building', 'loc', 'maker', 'mdate', 'rdate', 'note'];
+                    if (idx < 10) return item[mapping[idx]];
+                    if (idx === 10) return isWarning(item.type, item.rdate) ? '🚨경고' : '🟢정상';
+                    if (idx === 11) return item.lastCheck;
+                }))].filter(v => v !== undefined && v !== null && v !== '');
+                select.innerHTML = '<option value="all">전체</option>';
+                uniqueValues.sort().forEach(val => { select.innerHTML += `<option value="${val}" ${val == currentVal ? 'selected' : ''}>${val}</option>`; });
+            });
+        }
+
+        function applyDashFilter() {
+            const selects = document.querySelectorAll('#filter-header-row select');
+            const filters = Array.from(selects).map(s => s.value);
+            const rows = document.querySelectorAll('#all-table-body tr');
+            rows.forEach(row => {
+                const cells = Array.from(row.cells).map(c => c.textContent);
+                const isMatch = filters.every((f, idx) => f === 'all' || cells[idx] === f);
+                row.style.display = isMatch ? '' : 'none';
+            });
         }
 
         function updateDashboard() {
@@ -522,12 +664,12 @@
             document.getElementById('dash-normal-bar').style.width = pct + '%';
             document.getElementById('dash-warning-bar').style.width = (total > 0 ? (warn / total) * 100 : 0) + '%';
             document.getElementById('total-donut').style.background = `conic-gradient(#16a34a 0% ${pct}%, #dc2626 ${pct}% 100%)`;
-
             let body = document.getElementById('all-table-body'); body.innerHTML = '';
             db.forEach(i => {
                 let w = isWarning(i.type, i.rdate);
                 body.innerHTML += `<tr><td>${i.id}</td><td>${i.type}</td><td>${i.cap}</td><td>${i.team}</td><td>${i.building}</td><td>${i.loc}</td><td>${i.maker}</td><td>${i.mdate}</td><td>${i.rdate}</td><td>${i.note}</td><td>${w ? '🚨경고' : '🟢정상'}</td><td>${i.lastCheck}</td></tr>`;
             });
+            updateFilterOptions(); applyDashFilter();
         }
 
         function updateTeamView() {
@@ -537,7 +679,6 @@
             document.getElementById('team-co2-num').innerText = data.filter(i => i.type === 'CO2').length;
             document.getElementById('team-clean-num').innerText = data.filter(i => i.type === '청정').length;
             document.getElementById('team-warn-num').innerText = data.filter(i => isWarning(i.type, i.rdate)).length;
-
             let body = document.getElementById('team-table-body'); body.innerHTML = '';
             data.forEach(i => {
                 let w = isWarning(i.type, i.rdate);
@@ -559,27 +700,72 @@
 
         function renderTabs() {
             let t = document.getElementById('team-tabs'); t.innerHTML = '';
-            teams.forEach(name => t.innerHTML += `<button class="tab-btn ${name === currentTeam ? 'active' : ''}" onclick="selectTeam('${name}')">${name}</button>`);
+            teams.forEach(name => {
+                t.innerHTML += `<button class="tab-btn ${name === currentTeam ? 'active' : ''}" onclick="selectTeam('${name}')">${name}</button>`;
+            });
             document.getElementById('input-team').value = currentTeam;
             document.getElementById('current-team-title').innerText = currentTeam + " 목록";
             updateTeamView();
         }
 
         function selectTeam(n) { currentTeam = n; renderTabs(); }
-        function autoCalcDate() { let m = document.getElementById('input-mdate').value; if (document.getElementById('input-type').value === '분말' && m) { let d = new Date(m); d.setFullYear(d.getFullYear() + 9); d.setMonth(d.getMonth() + 11); document.getElementById('input-rdate').value = d.toISOString().substring(0, 7); } }
+
+        // [신규] 팀 이름 수정 기능
+        function editTeamName() {
+            let newName = prompt(`'${currentTeam}' 팀의 새로운 이름을 입력하세요:`, currentTeam);
+            if (newName && newName !== currentTeam) {
+                if (teams.includes(newName)) { alert('이미 존재하는 팀 이름입니다.'); return; }
+
+                // DB 내 부서명 모두 변경
+                db.forEach(item => { if (item.team === currentTeam) item.team = newName; });
+                // 팀 목록 변경
+                let idx = teams.indexOf(currentTeam);
+                teams[idx] = newName;
+                currentTeam = newName;
+
+                saveToLocal(); renderTabs(); updateDashboard();
+                alert('팀 이름이 성공적으로 수정되었습니다.');
+            }
+        }
+
+        // [신규] 팀 삭제 기능
+        function deleteTeam() {
+            if (teams.length <= 1) { alert('최소 한 개의 팀은 유지되어야 합니다.'); return; }
+            if (confirm(`'${currentTeam}' 팀과 해당 팀의 모든 소화기 데이터를 삭제하시겠습니까?`)) {
+                // 해당 팀 데이터 삭제
+                db = db.filter(item => item.team !== currentTeam);
+                // 팀 목록 삭제
+                teams = teams.filter(t => t !== currentTeam);
+                currentTeam = teams[0]; // 다른 팀으로 이동
+
+                saveToLocal(); renderTabs(); updateDashboard();
+                alert('팀이 삭제되었습니다.');
+            }
+        }
+
+        function autoCalcDate() {
+            let m = document.getElementById('input-mdate').value;
+            if (document.getElementById('input-type').value === '분말' && m) {
+                let d = new Date(m); d.setFullYear(d.getFullYear() + 9); d.setMonth(d.getMonth() + 11);
+                document.getElementById('input-rdate').value = d.toISOString().substring(0, 7);
+            }
+        }
         function handleTypeChange() { if (document.getElementById('input-type').value !== '분말') document.getElementById('input-rdate').value = ''; }
+
         function addData() {
             let id = document.getElementById('input-id').value; if (!id) return;
             let editIdx = parseInt(document.getElementById('edit-index').value);
-            let newData = { id, type: document.getElementById('input-type').value, cap: document.getElementById('input-cap').value, team: currentTeam, building: document.getElementById('input-building').value, loc: document.getElementById('input-loc').value, maker: document.getElementById('input-maker').value, mdate: document.getElementById('input-mdate').value, rdate: document.getElementById('input-rdate').value, note: document.getElementById('input-note').value, lastCheck: '-' };
-            if (editIdx > -1) { db[editIdx] = newData; document.getElementById('edit-index').value = "-1"; }
-            else db.push(newData);
+            let newData = { id, type: document.getElementById('input-type').value, cap: document.getElementById('input-cap').value, team: currentTeam, building: document.getElementById('input-building').value, loc: document.getElementById('input-loc').value, maker: document.getElementById('input-maker').value, mdate: document.getElementById('input-mdate').value, rdate: document.getElementById('input-rdate').value, note: document.getElementById('input-note').value, lastCheck: editIdx > -1 ? db[editIdx].lastCheck : '-' };
+            if (editIdx > -1) { db[editIdx] = newData; document.getElementById('edit-index').value = "-1"; document.getElementById('btn-submit').innerText = "데이터 저장하기"; }
+            else { db.push(newData); }
+            saveToLocal(); document.querySelectorAll('.form-grid input:not(#input-team)').forEach(i => i.value = '');
             updateTeamView(); updateDashboard();
         }
-        function deleteData(id) { if (confirm('삭제하시겠습니까?')) { db = db.filter(i => i.id !== id); updateTeamView(); updateDashboard(); } }
-        function markChecked(id) { db.find(x => x.id === id).lastCheck = new Date().toISOString().substring(0, 10); updateTeamView(); }
+
+        function deleteData(id) { if (confirm('삭제하시겠습니까?')) { db = db.filter(i => i.id !== id); saveToLocal(); updateTeamView(); updateDashboard(); } }
+        function markChecked(id) { db.find(x => x.id === id).lastCheck = new Date().toISOString().substring(0, 10); saveToLocal(); updateTeamView(); updateDashboard(); }
         function editMode(id) {
-            let item = db.find(i => i.id === id);
+            let item = db.find(i => i.id === id); if (!item) return;
             document.getElementById('edit-index').value = db.indexOf(item);
             document.getElementById('input-id').value = item.id;
             document.getElementById('input-type').value = item.type;
@@ -590,11 +776,12 @@
             document.getElementById('input-mdate').value = item.mdate;
             document.getElementById('input-rdate').value = item.rdate;
             document.getElementById('input-note').value = item.note;
+            document.getElementById('btn-submit').innerText = "✓ 수정 완료하기";
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-        function addTeam() { let n = prompt("새 팀 이름:"); if (n) { teams.push(n); selectTeam(n); } }
+        function addTeam() { let n = prompt("새 팀 이름:"); if (n) { if (teams.includes(n)) return; teams.push(n); saveToLocal(); selectTeam(n); } }
 
-        renderTabs(); updateDashboard();
+        window.onload = () => { renderTabs(); updateDashboard(); };
     </script>
 </body>
 
