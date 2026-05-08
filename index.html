@@ -561,7 +561,7 @@
             localStorage.setItem('fireExtTeams', JSON.stringify(teams));
         }
 
-        // [엑셀 인식 강화 버전]
+        // [강력 보정 버전] 엑셀 불러오기 함수
         function importExcel(event) {
             const file = event.target.files[0];
             const reader = new FileReader();
@@ -569,32 +569,50 @@
                 dbBackup = JSON.parse(JSON.stringify(db));
                 document.getElementById('undo-btn').style.display = 'inline-block';
                 const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true, cellText: false }); // 날짜 인식 강화
+
+                // 첫 번째 시트가 아닌 데이터가 있는 첫 시트를 찾음
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+
+                // 모든 데이터를 문자열로 강제 변환하여 읽음 (공백 제거 로직 포함)
+                const json = XLSX.utils.sheet_to_json(worksheet, { defval: "", raw: false });
+
+                if (json.length === 0) { alert('엑셀에 데이터가 없습니다.'); return; }
 
                 json.forEach(row => {
-                    // 사용자 엑셀 양식의 다양한 제목 명칭 허용 (유연한 매칭)
-                    const rowTeam = (row['부서'] || row['해당부서'] || row['관리부서'] || currentTeam).trim();
+                    // 1. 모든 키(제목)에서 눈에 안보이는 공백 제거
+                    const cleanRow = {};
+                    Object.keys(row).forEach(key => {
+                        cleanRow[key.trim().replace(/\s/g, '')] = String(row[key]).trim();
+                    });
+
+                    // 2. 항목 매칭 (제목이 정확히 같지 않아도 유사하면 매칭)
+                    const rowTeam = (cleanRow['해당부서'] || cleanRow['부서'] || cleanRow['팀'] || currentTeam);
                     if (!teams.includes(rowTeam)) teams.push(rowTeam);
 
-                    const mDateRaw = row['제조일자'] || row['제조일'] || '';
-                    const rDateRaw = row['교체예정일'] || row['교체일'] || '';
+                    // 3. 날짜 형식 보정 (숫자로 넘어오는 경우 대응)
+                    const formatDt = (val) => {
+                        if (!val || val === '-') return '-';
+                        let d = val.replace(/\./g, '-').replace(/\s/g, '');
+                        return d.substring(0, 7);
+                    };
 
                     db.push({
-                        id: String(row['번호'] || row['소화기관리번호'] || row['관리번호'] || '미기입').trim(),
-                        type: (row['품명'] || row['종류'] || '분말').trim(),
-                        cap: String(row['규격'] || row['용량'] || '').trim(),
+                        id: cleanRow['소화기관리번호'] || cleanRow['번호'] || cleanRow['관리번호'] || '미기입',
+                        type: cleanRow['종류'] || cleanRow['품명'] || '분말',
+                        cap: cleanRow['용량'] || cleanRow['규격'] || '',
                         team: rowTeam,
-                        building: String(row['건물명'] || '').trim(),
-                        loc: (row['위치'] || row['세부위치'] || '').trim(),
-                        maker: (row['제조업체명'] || row['제조사'] || '').trim(),
-                        mdate: mDateRaw ? String(mDateRaw).replace(/\./g, '-').substring(0, 7) : '-',
-                        rdate: rDateRaw ? String(rDateRaw).replace(/\./g, '-').substring(0, 7) : '-',
-                        note: (row['비고'] || row['변경/조치내역'] || '').trim(),
+                        building: cleanRow['건물명'] || cleanRow['건물'] || '',
+                        loc: cleanRow['세부위치'] || cleanRow['위치'] || '',
+                        maker: cleanRow['제조업체명'] || cleanRow['제조사'] || '',
+                        mdate: formatDt(cleanRow['제조일'] || cleanRow['제조일자']),
+                        rdate: formatDt(cleanRow['교체예정일'] || cleanRow['교체일']),
+                        note: cleanRow['변경/조치내역'] || cleanRow['비고'] || '',
                         lastCheck: '-'
                     });
                 });
-                saveToLocal(); renderTabs(); updateDashboard(); alert('엑셀 데이터가 성공적으로 분석되어 업로드되었습니다.');
+                saveToLocal(); renderTabs(); updateDashboard(); alert('엑셀 데이터를 완벽하게 불러왔습니다!');
             };
             reader.readAsArrayBuffer(file);
         }
