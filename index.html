@@ -115,9 +115,6 @@
             margin-left: 5px;
         }
 
-        /* 서브 버튼 색상 */
-
-        /* 대시보드 정렬 */
         .viz-container {
             display: flex;
             gap: 20px;
@@ -197,7 +194,6 @@
             transition: width 0.3s;
         }
 
-        /* 요약 카드 */
         .card-container {
             display: flex;
             gap: 10px;
@@ -240,7 +236,6 @@
             color: #dc2626;
         }
 
-        /* 테이블 및 선택 필터 */
         .table-wrapper {
             background: white;
             border-radius: 12px;
@@ -414,7 +409,6 @@
                     </div>
                 </div>
             </div>
-
             <div class="table-wrapper">
                 <h3>통합 목록 (항목 선택 필터링)</h3>
                 <div class="table-scroll">
@@ -483,9 +477,7 @@
                         취소</button>
                 </div>
             </div>
-
             <div class="tabs" id="team-tabs"></div>
-
             <div class="card-container">
                 <div class="mini-card card-total">
                     <h4>팀 전체</h4>
@@ -508,7 +500,6 @@
                     <div class="num" id="team-warn-num">0</div>
                 </div>
             </div>
-
             <div class="form-grid">
                 <input type="hidden" id="edit-index" value="-1">
                 <div class="form-group"><label>해당부서</label><input type="text" id="input-team" readonly
@@ -530,7 +521,6 @@
                         id="input-note"></div>
                 <button class="submit-btn" id="btn-submit" onclick="addData()">데이터 저장하기</button>
             </div>
-
             <div class="table-wrapper">
                 <h3 id="current-team-title">목록</h3>
                 <div class="table-scroll">
@@ -561,7 +551,6 @@
     </div>
 
     <script>
-        // 초기 데이터 로드
         let db = JSON.parse(localStorage.getItem('fireExtData')) || [];
         let teams = JSON.parse(localStorage.getItem('fireExtTeams')) || ['전해액제조팀', '제조4팀', '시설관리팀', '공무팀'];
         let dbBackup = null;
@@ -572,7 +561,44 @@
             localStorage.setItem('fireExtTeams', JSON.stringify(teams));
         }
 
-        // 엑셀 내보내기
+        // [엑셀 인식 강화 버전]
+        function importExcel(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                dbBackup = JSON.parse(JSON.stringify(db));
+                document.getElementById('undo-btn').style.display = 'inline-block';
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+
+                json.forEach(row => {
+                    // 사용자 엑셀 양식의 다양한 제목 명칭 허용 (유연한 매칭)
+                    const rowTeam = (row['부서'] || row['해당부서'] || row['관리부서'] || currentTeam).trim();
+                    if (!teams.includes(rowTeam)) teams.push(rowTeam);
+
+                    const mDateRaw = row['제조일자'] || row['제조일'] || '';
+                    const rDateRaw = row['교체예정일'] || row['교체일'] || '';
+
+                    db.push({
+                        id: String(row['번호'] || row['소화기관리번호'] || row['관리번호'] || '미기입').trim(),
+                        type: (row['품명'] || row['종류'] || '분말').trim(),
+                        cap: String(row['규격'] || row['용량'] || '').trim(),
+                        team: rowTeam,
+                        building: String(row['건물명'] || '').trim(),
+                        loc: (row['위치'] || row['세부위치'] || '').trim(),
+                        maker: (row['제조업체명'] || row['제조사'] || '').trim(),
+                        mdate: mDateRaw ? String(mDateRaw).replace(/\./g, '-').substring(0, 7) : '-',
+                        rdate: rDateRaw ? String(rDateRaw).replace(/\./g, '-').substring(0, 7) : '-',
+                        note: (row['비고'] || row['변경/조치내역'] || '').trim(),
+                        lastCheck: '-'
+                    });
+                });
+                saveToLocal(); renderTabs(); updateDashboard(); alert('엑셀 데이터가 성공적으로 분석되어 업로드되었습니다.');
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
         function exportToExcel() {
             if (db.length === 0) { alert('데이터가 없습니다.'); return; }
             const exportData = db.map(i => ({
@@ -584,37 +610,11 @@
             const worksheet = XLSX.utils.json_to_sheet(exportData);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "소화기관리데이터");
-            const dateStr = new Date().toISOString().substring(0, 10);
-            XLSX.writeFile(workbook, `소화기관리대장_${dateStr}.xlsx`);
-        }
-
-        function importExcel(event) {
-            const file = event.target.files[0];
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                dbBackup = JSON.parse(JSON.stringify(db));
-                document.getElementById('undo-btn').style.display = 'inline-block';
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-                json.forEach(row => {
-                    const rowTeam = row['해당부서'] || currentTeam;
-                    if (!teams.includes(rowTeam)) teams.push(rowTeam);
-                    db.push({
-                        id: String(row['소화기관리번호'] || '미기입'), type: row['종류'] || '분말', cap: row['용량'] || '',
-                        team: rowTeam, building: row['건물명'] || '', loc: row['세부위치'] || '',
-                        maker: row['제조업체명'] || '', mdate: row['제조일'] ? String(row['제조일']).substring(0, 7) : '-',
-                        rdate: row['교체예정일'] ? String(row['교체예정일']).substring(0, 7) : '-',
-                        note: row['변경/조치내역'] || '', lastCheck: '-'
-                    });
-                });
-                saveToLocal(); renderTabs(); updateDashboard(); alert('업로드 및 자동 저장 완료');
-            };
-            reader.readAsArrayBuffer(file);
+            XLSX.writeFile(workbook, `소화기관리대장_${new Date().toISOString().substring(0, 10)}.xlsx`);
         }
 
         function undoAction() {
-            if (dbBackup && confirm('불러오기 전으로 되돌리시겠습니까?')) {
+            if (dbBackup && confirm('되돌리시겠습니까?')) {
                 db = JSON.parse(JSON.stringify(dbBackup));
                 dbBackup = null; document.getElementById('undo-btn').style.display = 'none';
                 saveToLocal(); updateDashboard(); updateTeamView();
@@ -627,7 +627,6 @@
             return d <= 180;
         }
 
-        // 선택형 필터 목록 업데이트
         function updateFilterOptions() {
             const headers = document.querySelectorAll('#filter-header-row th');
             headers.forEach((th, idx) => {
@@ -710,36 +709,24 @@
 
         function selectTeam(n) { currentTeam = n; renderTabs(); }
 
-        // [신규] 팀 이름 수정 기능
         function editTeamName() {
             let newName = prompt(`'${currentTeam}' 팀의 새로운 이름을 입력하세요:`, currentTeam);
             if (newName && newName !== currentTeam) {
+                newName = newName.trim();
                 if (teams.includes(newName)) { alert('이미 존재하는 팀 이름입니다.'); return; }
-
-                // DB 내 부서명 모두 변경
                 db.forEach(item => { if (item.team === currentTeam) item.team = newName; });
-                // 팀 목록 변경
-                let idx = teams.indexOf(currentTeam);
-                teams[idx] = newName;
-                currentTeam = newName;
-
+                let idx = teams.indexOf(currentTeam); teams[idx] = newName; currentTeam = newName;
                 saveToLocal(); renderTabs(); updateDashboard();
-                alert('팀 이름이 성공적으로 수정되었습니다.');
             }
         }
 
-        // [신규] 팀 삭제 기능
         function deleteTeam() {
             if (teams.length <= 1) { alert('최소 한 개의 팀은 유지되어야 합니다.'); return; }
-            if (confirm(`'${currentTeam}' 팀과 해당 팀의 모든 소화기 데이터를 삭제하시겠습니까?`)) {
-                // 해당 팀 데이터 삭제
+            if (confirm(`'${currentTeam}' 팀과 해당 데이터를 모두 삭제하시겠습니까?`)) {
                 db = db.filter(item => item.team !== currentTeam);
-                // 팀 목록 삭제
                 teams = teams.filter(t => t !== currentTeam);
-                currentTeam = teams[0]; // 다른 팀으로 이동
-
+                currentTeam = teams[0];
                 saveToLocal(); renderTabs(); updateDashboard();
-                alert('팀이 삭제되었습니다.');
             }
         }
 
@@ -779,7 +766,7 @@
             document.getElementById('btn-submit').innerText = "✓ 수정 완료하기";
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-        function addTeam() { let n = prompt("새 팀 이름:"); if (n) { if (teams.includes(n)) return; teams.push(n); saveToLocal(); selectTeam(n); } }
+        function addTeam() { let n = prompt("새 팀 이름:"); if (n) { n = n.trim(); if (teams.includes(n)) return; teams.push(n); saveToLocal(); selectTeam(n); } }
 
         window.onload = () => { renderTabs(); updateDashboard(); };
     </script>
