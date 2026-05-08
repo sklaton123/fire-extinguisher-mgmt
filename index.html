@@ -7,6 +7,7 @@
     <title>소화기 관리대장 시스템</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
+        /* 기존 스타일 유지 */
         * {
             box-sizing: border-box;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -101,6 +102,11 @@
             background: #059669;
         }
 
+        .btn-txt {
+            background: #8b5cf6;
+        }
+
+        /* 메모장 버튼 색상 */
         .btn-save {
             background: #0ea5e9;
         }
@@ -470,6 +476,9 @@
                 <div class="header-right">
                     <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" style="display:none;"
                         onchange="importExcel(event)">
+                    <input type="file" id="txt-upload" accept=".txt" style="display:none;" onchange="importTxt(event)">
+                    <button class="btn btn-txt" onclick="document.getElementById('txt-upload').click()">📄 메모장(TXT)
+                        불러오기</button>
                     <button class="btn btn-excel" onclick="document.getElementById('excel-upload').click()">📂 엑셀
                         불러오기</button>
                     <button class="btn btn-save" onclick="exportToExcel()">💾 엑셀로 저장</button>
@@ -522,7 +531,6 @@
                 <button class="submit-btn" id="btn-submit" onclick="addData()">데이터 저장하기</button>
             </div>
             <div class="table-wrapper">
-                <h3 id="current-team-title">목록</h3>
                 <div class="table-scroll">
                     <table style="min-width: 1600px;">
                         <thead>
@@ -561,7 +569,55 @@
             localStorage.setItem('fireExtTeams', JSON.stringify(teams));
         }
 
-        // [강력 보정 버전] 엑셀 불러오기 함수
+        // [DRM 우회용] 메모장(TXT) 불러오기 함수
+        function importTxt(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result;
+                const lines = text.split('\n');
+                if (lines.length < 2) return;
+
+                dbBackup = JSON.parse(JSON.stringify(db));
+                document.getElementById('undo-btn').style.display = 'inline-block';
+
+                // 첫 줄은 제목행으로 사용
+                const headers = lines[0].split('\t').map(h => h.trim().replace(/\s/g, ''));
+
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    const cols = lines[i].split('\t').map(c => c.trim());
+                    const row = {};
+                    headers.forEach((h, idx) => row[h] = cols[idx] || "");
+
+                    const rowTeam = (row['해당부서'] || row['부서'] || row['팀'] || currentTeam);
+                    if (!teams.includes(rowTeam)) teams.push(rowTeam);
+
+                    const formatDt = (val) => {
+                        if (!val || val === '-') return '-';
+                        return val.replace(/\./g, '-').replace(/\s/g, '').substring(0, 7);
+                    };
+
+                    db.push({
+                        id: row['소화기관리번호'] || row['번호'] || row['관리번호'] || '미기입',
+                        type: row['종류'] || row['품명'] || '분말',
+                        cap: row['용량'] || row['규격'] || '',
+                        team: rowTeam,
+                        building: row['건물명'] || row['건물'] || '',
+                        loc: row['세부위치'] || row['위치'] || '',
+                        maker: row['제조업체명'] || row['제조사'] || '',
+                        mdate: formatDt(row['제조일'] || row['제조일자']),
+                        rdate: formatDt(row['교체예정일'] || row['교체일']),
+                        note: row['변경/조치내역'] || row['비고'] || '',
+                        lastCheck: '-'
+                    });
+                }
+                saveToLocal(); renderTabs(); updateDashboard(); alert('메모장 데이터를 불러와 DRM 보안을 우회했습니다!');
+            };
+            reader.readAsText(file);
+        }
+
+        // 기존 엑셀, 저장, 수정 등 모든 함수 유지...
         function importExcel(event) {
             const file = event.target.files[0];
             const reader = new FileReader();
@@ -569,223 +625,61 @@
                 dbBackup = JSON.parse(JSON.stringify(db));
                 document.getElementById('undo-btn').style.display = 'inline-block';
                 const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array', cellDates: true, cellText: false }); // 날짜 인식 강화
-
-                // 첫 번째 시트가 아닌 데이터가 있는 첫 시트를 찾음
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-
-                // 모든 데이터를 문자열로 강제 변환하여 읽음 (공백 제거 로직 포함)
-                const json = XLSX.utils.sheet_to_json(worksheet, { defval: "", raw: false });
-
-                if (json.length === 0) { alert('엑셀에 데이터가 없습니다.'); return; }
-
-                json.forEach(row => {
-                    // 1. 모든 키(제목)에서 눈에 안보이는 공백 제거
-                    const cleanRow = {};
-                    Object.keys(row).forEach(key => {
-                        cleanRow[key.trim().replace(/\s/g, '')] = String(row[key]).trim();
+                try {
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+                    json.forEach(row => {
+                        const cleanRow = {};
+                        Object.keys(row).forEach(key => cleanRow[key.trim().replace(/\s/g, '')] = String(row[key]).trim());
+                        const rowTeam = (cleanRow['해당부서'] || cleanRow['부서'] || currentTeam);
+                        if (!teams.includes(rowTeam)) teams.push(rowTeam);
+                        const formatDt = (val) => {
+                            if (!val || val === '-') return '-';
+                            return val.replace(/\./g, '-').replace(/\s/g, '').substring(0, 7);
+                        };
+                        db.push({
+                            id: cleanRow['소화기관리번호'] || cleanRow['번호'] || '미기입',
+                            type: cleanRow['종류'] || cleanRow['품명'] || '분말',
+                            cap: cleanRow['용량'] || cleanRow['규격'] || '',
+                            team: rowTeam, building: cleanRow['건물명'] || '', loc: cleanRow['세부위치'] || cleanRow['위치'] || '',
+                            maker: cleanRow['제조업체명'] || '', mdate: formatDt(cleanRow['제조일'] || cleanRow['제조일자']),
+                            rdate: formatDt(cleanRow['교체예정일'] || cleanRow['교체일']), note: cleanRow['변경/조치내역'] || '', lastCheck: '-'
+                        });
                     });
-
-                    // 2. 항목 매칭 (제목이 정확히 같지 않아도 유사하면 매칭)
-                    const rowTeam = (cleanRow['해당부서'] || cleanRow['부서'] || cleanRow['팀'] || currentTeam);
-                    if (!teams.includes(rowTeam)) teams.push(rowTeam);
-
-                    // 3. 날짜 형식 보정 (숫자로 넘어오는 경우 대응)
-                    const formatDt = (val) => {
-                        if (!val || val === '-') return '-';
-                        let d = val.replace(/\./g, '-').replace(/\s/g, '');
-                        return d.substring(0, 7);
-                    };
-
-                    db.push({
-                        id: cleanRow['소화기관리번호'] || cleanRow['번호'] || cleanRow['관리번호'] || '미기입',
-                        type: cleanRow['종류'] || cleanRow['품명'] || '분말',
-                        cap: cleanRow['용량'] || cleanRow['규격'] || '',
-                        team: rowTeam,
-                        building: cleanRow['건물명'] || cleanRow['건물'] || '',
-                        loc: cleanRow['세부위치'] || cleanRow['위치'] || '',
-                        maker: cleanRow['제조업체명'] || cleanRow['제조사'] || '',
-                        mdate: formatDt(cleanRow['제조일'] || cleanRow['제조일자']),
-                        rdate: formatDt(cleanRow['교체예정일'] || cleanRow['교체일']),
-                        note: cleanRow['변경/조치내역'] || cleanRow['비고'] || '',
-                        lastCheck: '-'
-                    });
-                });
-                saveToLocal(); renderTabs(); updateDashboard(); alert('엑셀 데이터를 완벽하게 불러왔습니다!');
+                    saveToLocal(); renderTabs(); updateDashboard(); alert('엑셀 업로드 완료!');
+                } catch (err) { alert('보안(DRM)으로 인해 엑셀을 직접 읽을 수 없습니다. 메모장 기능을 사용하세요!'); }
             };
             reader.readAsArrayBuffer(file);
         }
 
         function exportToExcel() {
-            if (db.length === 0) { alert('데이터가 없습니다.'); return; }
-            const exportData = db.map(i => ({
-                '소화기관리번호': i.id, '종류': i.type, '용량': i.cap, '해당부서': i.team,
-                '건물명': i.building, '세부위치': i.loc, '제조업체명': i.maker,
-                '제조일': i.mdate, '교체예정일': i.rdate, '변경/조치내역': i.note,
-                '상태': isWarning(i.type, i.rdate) ? '🚨경고' : '🟢정상', '최근점검': i.lastCheck
-            }));
+            if (db.length === 0) return;
+            const exportData = db.map(i => ({ '소화기관리번호': i.id, '종류': i.type, '용량': i.cap, '해당부서': i.team, '건물명': i.building, '세부위치': i.loc, '제조업체명': i.maker, '제조일': i.mdate, '교체예정일': i.rdate, '변경/조치내역': i.note, '상태': isWarning(i.type, i.rdate) ? '🚨경고' : '🟢정상', '최근점검': i.lastCheck }));
             const worksheet = XLSX.utils.json_to_sheet(exportData);
             const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "소화기관리데이터");
-            XLSX.writeFile(workbook, `소화기관리대장_${new Date().toISOString().substring(0, 10)}.xlsx`);
+            XLSX.utils.book_append_sheet(workbook, worksheet, "데이터");
+            XLSX.writeFile(workbook, `소화기관리_${new Date().toISOString().substring(0, 10)}.xlsx`);
         }
 
-        function undoAction() {
-            if (dbBackup && confirm('되돌리시겠습니까?')) {
-                db = JSON.parse(JSON.stringify(dbBackup));
-                dbBackup = null; document.getElementById('undo-btn').style.display = 'none';
-                saveToLocal(); updateDashboard(); updateTeamView();
-            }
-        }
-
-        function isWarning(t, r) {
-            if (t !== '분말' || !r || r === '-') return false;
-            let d = (new Date(r + "-01") - new Date()) / (1000 * 60 * 60 * 24);
-            return d <= 180;
-        }
-
-        function updateFilterOptions() {
-            const headers = document.querySelectorAll('#filter-header-row th');
-            headers.forEach((th, idx) => {
-                const select = th.querySelector('select');
-                const currentVal = select.value;
-                const uniqueValues = [...new Set(db.map(item => {
-                    const mapping = ['id', 'type', 'cap', 'team', 'building', 'loc', 'maker', 'mdate', 'rdate', 'note'];
-                    if (idx < 10) return item[mapping[idx]];
-                    if (idx === 10) return isWarning(item.type, item.rdate) ? '🚨경고' : '🟢정상';
-                    if (idx === 11) return item.lastCheck;
-                }))].filter(v => v !== undefined && v !== null && v !== '');
-                select.innerHTML = '<option value="all">전체</option>';
-                uniqueValues.sort().forEach(val => { select.innerHTML += `<option value="${val}" ${val == currentVal ? 'selected' : ''}>${val}</option>`; });
-            });
-        }
-
-        function applyDashFilter() {
-            const selects = document.querySelectorAll('#filter-header-row select');
-            const filters = Array.from(selects).map(s => s.value);
-            const rows = document.querySelectorAll('#all-table-body tr');
-            rows.forEach(row => {
-                const cells = Array.from(row.cells).map(c => c.textContent);
-                const isMatch = filters.every((f, idx) => f === 'all' || cells[idx] === f);
-                row.style.display = isMatch ? '' : 'none';
-            });
-        }
-
-        function updateDashboard() {
-            let total = db.length, warn = db.filter(i => isWarning(i.type, i.rdate)).length, norm = total - warn;
-            let pct = total > 0 ? (norm / total) * 100 : 0;
-            document.getElementById('dash-total').innerText = total;
-            document.getElementById('dash-normal-txt').innerText = norm;
-            document.getElementById('dash-warning-txt').innerText = warn;
-            document.getElementById('dash-normal-bar').style.width = pct + '%';
-            document.getElementById('dash-warning-bar').style.width = (total > 0 ? (warn / total) * 100 : 0) + '%';
-            document.getElementById('total-donut').style.background = `conic-gradient(#16a34a 0% ${pct}%, #dc2626 ${pct}% 100%)`;
-            let body = document.getElementById('all-table-body'); body.innerHTML = '';
-            db.forEach(i => {
-                let w = isWarning(i.type, i.rdate);
-                body.innerHTML += `<tr><td>${i.id}</td><td>${i.type}</td><td>${i.cap}</td><td>${i.team}</td><td>${i.building}</td><td>${i.loc}</td><td>${i.maker}</td><td>${i.mdate}</td><td>${i.rdate}</td><td>${i.note}</td><td>${w ? '🚨경고' : '🟢정상'}</td><td>${i.lastCheck}</td></tr>`;
-            });
-            updateFilterOptions(); applyDashFilter();
-        }
-
-        function updateTeamView() {
-            let data = db.filter(i => i.team === currentTeam);
-            document.getElementById('team-total-num').innerText = data.length;
-            document.getElementById('team-powder-num').innerText = data.filter(i => i.type === '분말').length;
-            document.getElementById('team-co2-num').innerText = data.filter(i => i.type === 'CO2').length;
-            document.getElementById('team-clean-num').innerText = data.filter(i => i.type === '청정').length;
-            document.getElementById('team-warn-num').innerText = data.filter(i => isWarning(i.type, i.rdate)).length;
-            let body = document.getElementById('team-table-body'); body.innerHTML = '';
-            data.forEach(i => {
-                let w = isWarning(i.type, i.rdate);
-                body.innerHTML += `<tr>
-                    <td>${i.id}</td><td>${i.type}</td><td>${i.cap}</td><td>${i.team}</td><td>${i.building}</td><td>${i.loc}</td><td>${i.maker}</td><td>${i.mdate}</td><td>${i.rdate}</td><td>${i.note}</td><td>${w ? '🚨경고' : '🟢정상'}</td><td>${i.lastCheck}</td>
-                    <td><button class="action-btn check-btn" onclick="markChecked('${i.id}')">점검</button></td>
-                    <td><button class="action-btn edit-btn" onclick="editMode('${i.id}')">수정</button> <button class="action-btn del-btn" onclick="deleteData('${i.id}')">삭제</button></td>
-                </tr>`;
-            });
-        }
-
-        function switchMenu(m) {
-            document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-            if (m === 'dashboard') { document.getElementById('btn-menu-dash').classList.add('active'); updateDashboard(); }
-            else { document.getElementById('btn-menu-team').classList.add('active'); updateTeamView(); }
-            document.getElementById(`view-${m}`).classList.add('active');
-        }
-
-        function renderTabs() {
-            let t = document.getElementById('team-tabs'); t.innerHTML = '';
-            teams.forEach(name => {
-                t.innerHTML += `<button class="tab-btn ${name === currentTeam ? 'active' : ''}" onclick="selectTeam('${name}')">${name}</button>`;
-            });
-            document.getElementById('input-team').value = currentTeam;
-            document.getElementById('current-team-title').innerText = currentTeam + " 목록";
-            updateTeamView();
-        }
-
+        function undoAction() { if (dbBackup && confirm('되돌리시겠습니까?')) { db = JSON.parse(JSON.stringify(dbBackup)); dbBackup = null; document.getElementById('undo-btn').style.display = 'none'; saveToLocal(); updateDashboard(); updateTeamView(); } }
+        function isWarning(t, r) { if (t !== '분말' || !r || r === '-') return false; let d = (new Date(r + "-01") - new Date()) / (1000 * 60 * 60 * 24); return d <= 180; }
+        function updateFilterOptions() { const headers = document.querySelectorAll('#filter-header-row th'); headers.forEach((th, idx) => { const select = th.querySelector('select'); const currentVal = select.value; const uniqueValues = [...new Set(db.map(item => { const mapping = ['id', 'type', 'cap', 'team', 'building', 'loc', 'maker', 'mdate', 'rdate', 'note']; if (idx < 10) return item[mapping[idx]]; if (idx === 10) return isWarning(item.type, item.rdate) ? '🚨경고' : '🟢정상'; if (idx === 11) return item.lastCheck; }))].filter(v => v); select.innerHTML = '<option value="all">전체</option>'; uniqueValues.sort().forEach(val => { select.innerHTML += `<option value="${val}" ${val == currentVal ? 'selected' : ''}>${val}</option>`; }); }); }
+        function applyDashFilter() { const selects = document.querySelectorAll('#filter-header-row select'); const filters = Array.from(selects).map(s => s.value); const rows = document.querySelectorAll('#all-table-body tr'); rows.forEach(row => { const cells = Array.from(row.cells).map(c => c.textContent); const isMatch = filters.every((f, idx) => f === 'all' || cells[idx] === f); row.style.display = isMatch ? '' : 'none'; }); }
+        function updateDashboard() { let total = db.length, warn = db.filter(i => isWarning(i.type, i.rdate)).length, norm = total - warn; let pct = total > 0 ? (norm / total) * 100 : 0; document.getElementById('dash-total').innerText = total; document.getElementById('dash-normal-txt').innerText = norm; document.getElementById('dash-warning-txt').innerText = warn; document.getElementById('dash-normal-bar').style.width = pct + '%'; document.getElementById('dash-warning-bar').style.width = (total > 0 ? (warn / total) * 100 : 0) + '%'; document.getElementById('total-donut').style.background = `conic-gradient(#16a34a 0% ${pct}%, #dc2626 ${pct}% 100%)`; let body = document.getElementById('all-table-body'); body.innerHTML = ''; db.forEach(i => { let w = isWarning(i.type, i.rdate); body.innerHTML += `<tr><td>${i.id}</td><td>${i.type}</td><td>${i.cap}</td><td>${i.team}</td><td>${i.building}</td><td>${i.loc}</td><td>${i.maker}</td><td>${i.mdate}</td><td>${i.rdate}</td><td>${i.note}</td><td>${w ? '🚨경고' : '🟢정상'}</td><td>${i.lastCheck}</td></tr>`; }); updateFilterOptions(); applyDashFilter(); }
+        function updateTeamView() { let data = db.filter(i => i.team === currentTeam); document.getElementById('team-total-num').innerText = data.length; document.getElementById('team-powder-num').innerText = data.filter(i => i.type === '분말').length; document.getElementById('team-co2-num').innerText = data.filter(i => i.type === 'CO2').length; document.getElementById('team-clean-num').innerText = data.filter(i => i.type === '청정').length; document.getElementById('team-warn-num').innerText = data.filter(i => isWarning(i.type, i.rdate)).length; let body = document.getElementById('team-table-body'); body.innerHTML = ''; data.forEach(i => { let w = isWarning(i.type, i.rdate); body.innerHTML += `<tr><td>${i.id}</td><td>${i.type}</td><td>${i.cap}</td><td>${i.team}</td><td>${i.building}</td><td>${i.loc}</td><td>${i.maker}</td><td>${i.mdate}</td><td>${i.rdate}</td><td>${i.note}</td><td>${w ? '🚨경고' : '🟢정상'}</td><td>${i.lastCheck}</td><td><button class="action-btn check-btn" onclick="markChecked('${i.id}')">점검</button></td><td><button class="action-btn edit-btn" onclick="editMode('${i.id}')">수정</button> <button class="action-btn del-btn" onclick="deleteData('${i.id}')">삭제</button></td></tr>`; }); }
+        function switchMenu(m) { document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active')); document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active')); if (m === 'dashboard') { document.getElementById('btn-menu-dash').classList.add('active'); updateDashboard(); } else { document.getElementById('btn-menu-team').classList.add('active'); updateTeamView(); } document.getElementById(`view-${m}`).classList.add('active'); }
+        function renderTabs() { let t = document.getElementById('team-tabs'); t.innerHTML = ''; teams.forEach(name => { t.innerHTML += `<button class="tab-btn ${name === currentTeam ? 'active' : ''}" onclick="selectTeam('${name}')">${name}</button>`; }); document.getElementById('input-team').value = currentTeam; document.getElementById('current-team-title').innerText = currentTeam + " 목록"; updateTeamView(); }
         function selectTeam(n) { currentTeam = n; renderTabs(); }
-
-        function editTeamName() {
-            let newName = prompt(`'${currentTeam}' 팀의 새로운 이름을 입력하세요:`, currentTeam);
-            if (newName && newName !== currentTeam) {
-                newName = newName.trim();
-                if (teams.includes(newName)) { alert('이미 존재하는 팀 이름입니다.'); return; }
-                db.forEach(item => { if (item.team === currentTeam) item.team = newName; });
-                let idx = teams.indexOf(currentTeam); teams[idx] = newName; currentTeam = newName;
-                saveToLocal(); renderTabs(); updateDashboard();
-            }
-        }
-
-        function deleteTeam() {
-            if (teams.length <= 1) { alert('최소 한 개의 팀은 유지되어야 합니다.'); return; }
-            if (confirm(`'${currentTeam}' 팀과 해당 데이터를 모두 삭제하시겠습니까?`)) {
-                db = db.filter(item => item.team !== currentTeam);
-                teams = teams.filter(t => t !== currentTeam);
-                currentTeam = teams[0];
-                saveToLocal(); renderTabs(); updateDashboard();
-            }
-        }
-
-        function autoCalcDate() {
-            let m = document.getElementById('input-mdate').value;
-            if (document.getElementById('input-type').value === '분말' && m) {
-                let d = new Date(m); d.setFullYear(d.getFullYear() + 9); d.setMonth(d.getMonth() + 11);
-                document.getElementById('input-rdate').value = d.toISOString().substring(0, 7);
-            }
-        }
+        function editTeamName() { let newName = prompt(`'${currentTeam}' 팀의 이름을 수정:`, currentTeam); if (newName && newName !== currentTeam) { newName = newName.trim(); if (teams.includes(newName)) return; db.forEach(item => { if (item.team === currentTeam) item.team = newName; }); let idx = teams.indexOf(currentTeam); teams[idx] = newName; currentTeam = newName; saveToLocal(); renderTabs(); updateDashboard(); } }
+        function deleteTeam() { if (teams.length <= 1) return; if (confirm(`'${currentTeam}' 팀을 삭제하시겠습니까?`)) { db = db.filter(item => item.team !== currentTeam); teams = teams.filter(t => t !== currentTeam); currentTeam = teams[0]; saveToLocal(); renderTabs(); updateDashboard(); } }
+        function autoCalcDate() { let m = document.getElementById('input-mdate').value; if (document.getElementById('input-type').value === '분말' && m) { let d = new Date(m); d.setFullYear(d.getFullYear() + 9); d.setMonth(d.getMonth() + 11); document.getElementById('input-rdate').value = d.toISOString().substring(0, 7); } }
         function handleTypeChange() { if (document.getElementById('input-type').value !== '분말') document.getElementById('input-rdate').value = ''; }
-
-        function addData() {
-            let id = document.getElementById('input-id').value; if (!id) return;
-            let editIdx = parseInt(document.getElementById('edit-index').value);
-            let newData = { id, type: document.getElementById('input-type').value, cap: document.getElementById('input-cap').value, team: currentTeam, building: document.getElementById('input-building').value, loc: document.getElementById('input-loc').value, maker: document.getElementById('input-maker').value, mdate: document.getElementById('input-mdate').value, rdate: document.getElementById('input-rdate').value, note: document.getElementById('input-note').value, lastCheck: editIdx > -1 ? db[editIdx].lastCheck : '-' };
-            if (editIdx > -1) { db[editIdx] = newData; document.getElementById('edit-index').value = "-1"; document.getElementById('btn-submit').innerText = "데이터 저장하기"; }
-            else { db.push(newData); }
-            saveToLocal(); document.querySelectorAll('.form-grid input:not(#input-team)').forEach(i => i.value = '');
-            updateTeamView(); updateDashboard();
-        }
-
-        function deleteData(id) { if (confirm('삭제하시겠습니까?')) { db = db.filter(i => i.id !== id); saveToLocal(); updateTeamView(); updateDashboard(); } }
+        function addData() { let id = document.getElementById('input-id').value; if (!id) return; let editIdx = parseInt(document.getElementById('edit-index').value); let newData = { id, type: document.getElementById('input-type').value, cap: document.getElementById('input-cap').value, team: currentTeam, building: document.getElementById('input-building').value, loc: document.getElementById('input-loc').value, maker: document.getElementById('input-maker').value, mdate: document.getElementById('input-mdate').value, rdate: document.getElementById('input-rdate').value, note: document.getElementById('input-note').value, lastCheck: editIdx > -1 ? db[editIdx].lastCheck : '-' }; if (editIdx > -1) { db[editIdx] = newData; document.getElementById('edit-index').value = "-1"; document.getElementById('btn-submit').innerText = "데이터 저장하기"; } else { db.push(newData); } saveToLocal(); document.querySelectorAll('.form-grid input:not(#input-team)').forEach(i => i.value = ''); updateTeamView(); updateDashboard(); }
+        function deleteData(id) { if (confirm('삭제?')) { db = db.filter(i => i.id !== id); saveToLocal(); updateTeamView(); updateDashboard(); } }
         function markChecked(id) { db.find(x => x.id === id).lastCheck = new Date().toISOString().substring(0, 10); saveToLocal(); updateTeamView(); updateDashboard(); }
-        function editMode(id) {
-            let item = db.find(i => i.id === id); if (!item) return;
-            document.getElementById('edit-index').value = db.indexOf(item);
-            document.getElementById('input-id').value = item.id;
-            document.getElementById('input-type').value = item.type;
-            document.getElementById('input-cap').value = item.cap;
-            document.getElementById('input-building').value = item.building;
-            document.getElementById('input-loc').value = item.loc;
-            document.getElementById('input-maker').value = item.maker;
-            document.getElementById('input-mdate').value = item.mdate;
-            document.getElementById('input-rdate').value = item.rdate;
-            document.getElementById('input-note').value = item.note;
-            document.getElementById('btn-submit').innerText = "✓ 수정 완료하기";
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
+        function editMode(id) { let item = db.find(i => i.id === id); if (!item) return; document.getElementById('edit-index').value = db.indexOf(item); document.getElementById('input-id').value = item.id; document.getElementById('input-type').value = item.type; document.getElementById('input-cap').value = item.cap; document.getElementById('input-building').value = item.building; document.getElementById('input-loc').value = item.loc; document.getElementById('input-maker').value = item.maker; document.getElementById('input-mdate').value = item.mdate; document.getElementById('input-rdate').value = item.rdate; document.getElementById('input-note').value = item.note; document.getElementById('btn-submit').innerText = "✓ 수정 완료하기"; window.scrollTo({ top: 0, behavior: 'smooth' }); }
         function addTeam() { let n = prompt("새 팀 이름:"); if (n) { n = n.trim(); if (teams.includes(n)) return; teams.push(n); saveToLocal(); selectTeam(n); } }
-
         window.onload = () => { renderTabs(); updateDashboard(); };
     </script>
 </body>
